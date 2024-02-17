@@ -24,6 +24,9 @@ def main():
         current_capture = pd.read_csv(f"{f}")
         simple_features(current_capture)
         
+def filter_out_irrelevant_pkts():
+    pass
+        
 def remove_quic_handshake():
     pass
 
@@ -31,6 +34,7 @@ def remove_tcp_handshake():
     pass
 
 def label_dataframe(capture_df: pd.DataFrame) -> pd.DataFrame:
+    # data_length, pkt_length, arrival_time
     pass
         
         
@@ -45,7 +49,7 @@ def simple_features(capture_df: pd.DataFrame):
         pkt_size = row
         if src_port == 2020 and dst_port == 58762:
             simple_features_results["positive"+get_pkt_size_classification(pkt_size)]
-        elif src_port == 2020 and dst_port == 58762:
+        elif dst_port == 2020 and src_port == 58762:
            simple_features_results["negative"+get_pkt_size_classification(pkt_size)]
         else:
             print("Neither the src or dst ip matched the client or server IP")
@@ -124,15 +128,22 @@ packet for IQUIC, and the Change Cipher Spec packet for HTTPS,
 then 𝑙-th dimension of this feature is set to (Time(𝑡𝑖) − Time(𝑡𝑖−1)),
 where 𝑡𝑖, 𝑡𝑖−1 ∈ 𝑇 . This feature is a 𝑘-dimension vector.
 """
-def interarrival_time():
-    pass
+def interarrival_time(capture_df):
+    interarrival_times = [-1 for i in range(len(capture_df))]
+    previous_row_atime = 0
+    
+    for index, row in capture_df.iterrows():
+        interarrival_times.append(row['arrival_time'] - previous_row_atime)
+        previous_row_atime = row['arrival_time']
+        
+    return interarrival_times
 
 """negative packets: this feature statistics the number of packet 𝑡
 in negative direction in traffic 𝑇 . This 1-dimension feature is set
 to Card({(𝑡𝑗 , 𝑑𝑗 )|𝑑𝑗 = negative}).
 """
-def neg_pkts():
-    pass
+def neg_pkts(simple_features):
+    return (simple_features["negativetiny"] + simple_features["negativesmall"] + simple_features["negativemedium"] + simple_features["negativelarge"])
 
 """cumulative size: this feature statistics the cumulative size of
 packets in traffic 𝑇 . This 1-dimension feature is set to ∑{𝑇𝑝, 𝑇𝑛},
@@ -141,10 +152,43 @@ where 𝑇𝑝 = {Length((𝑡𝑖, 𝑑𝑖))|𝑡𝑖 ∈ 𝑇 , 𝑑𝑖 = po
 
 THIS IS SUPER MISLEADING IN THE PAPER, CUMULATIVE SIZE IS JUST TOTAL SIZE AS IT IS 1 DIMENSION
 """
-def cumulative_size():
+def cumulative_size(capture_df: pd.DataFrame):
+    return capture_df['pkt_length'].cumsum()
+
+"""cumulative size with direction: this feature statistics the cu-
+mulative size of packets in traffic 𝑇 , but the impact of packet
+direction 𝑑 is considered. This 1-dimension feature is set to
+∑{𝑇𝑝, 𝑇𝑛}, where 𝑇𝑝 = {Length((𝑡𝑖, 𝑑𝑖))|𝑡𝑖 ∈ 𝑇 , 𝑑𝑖 = positive}, 𝑇𝑛 =
+{−Length((𝑡𝑖, 𝑑𝑖))|𝑡𝑖 ∈ 𝑇 , 𝑑𝑖 = negative}.
+"""
+def cumulative_size_w_direction(capture_df: pd.DataFrame):
+    cumulative_sum = 0
+    for index, row in capture_df.iterrows():
+        src_port = row.src_port
+        dst_port = row.dst_port
+        if src_port == 2020 and dst_port == 58762:
+            cumulative_sum += row.pkt_length
+        elif dst_port == 2020 and src_port == 58762:
+            cumulative_sum -= row.pkt_length
+    return cumulative_sum
+
+"""bursts numbers/maximal length/mean length: burst is define
+as the consecutive packets between two packets sent in the oppo-
+site direction [33]. Bursts numbers, bursts maximal length, and
+bursts mean length is the statistical features based on burst in the
+traffic 𝑇
+"""
+def burst_features():
     pass
 
-def
+"""total transmission time: this feature statistics the total trans-
+mission time of traffic 𝑇 . This 1-dimension feature is set to
+∑{Time(𝑡𝑖) − Time(𝑡𝑖−1)|𝑡𝑖 ∈ 𝑇 , 𝑖 > 1}
+"""
+def total_transmission_time():
+    pass
+
+
         
             
     
