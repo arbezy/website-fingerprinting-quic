@@ -1,16 +1,6 @@
-# parse csv into traffic features
-
-
-# unique pkt size, packet size count, packer order, 
-# inter-arrival time (should i do this one?), negative packets (number of traffic going from server to client)
-# cumulative size, cumulative size with direction, burst number/maximal length/mean length,
-# total transmission time
-
-
-# also need to classify traffic into positive/negative, tiny/small/medium/large
-
-# need to remove handshake data as it is done in the early quic paper
-
+"""Feature extractor for quic and tcp traffic used to train a website fingerprinting model
+by ANDREW ELLISON
+"""
 
 import pandas as pd
 import numpy as np
@@ -22,7 +12,8 @@ from statistics import mean
 
 def main():
     for f in os.listdir(sys.argv[1]):
-        current_capture = pd.read_csv(f"{f}", sep='\t')
+        fname = os.path.join(sys.argv[1], f)
+        current_capture = pd.read_csv(f"{fname}", sep='\t')
         
         if is_quic:
             current_capture = label_quic_dataframe(current_capture)
@@ -33,39 +24,48 @@ def main():
             current_capture = filter_out_irrelevant_pkts_tcp(current_capture)
             current_capture = remove_tcp_handshake(current_capture)
             
+        print(current_capture)
+            
+            
         simple = simple_features(current_capture)
-        transfer = transfer_features(current_capture)
+        #transfer = transfer_features(current_capture)
+        
+        print(simple)
+        # TODO: need to save features (as csv or json?)
         
         
 def filter_out_irrelevant_pkts_quic(df: pd.DataFrame) -> pd.DataFrame:
     # checking source ports or ip addresses
-    df1 = df[df['dst_port'] == 2020]
-    df2 = df[df['src_port'] == 2020]
+    # TODO: change back to 2020 for real data
+    df1 = df[df['dst_port'] == 443]
+    df1.head(5)
+    df2 = df[df['src_port'] == 443]
+    df2.head(5)
     df1 = df1.append(df2, ignore_index=False)
     df1 = df1.sort_values(by=['seq_num'])
     return df1
 
 def filter_out_irrelevant_pkts_tcp(df: pd.DataFrame) -> pd.DataFrame:
-    df1 = df[df['dst_port_tcp'] == 2020]
-    df2 = df[df['src_port_tcp'] == 2020]
-    df3 = df[df['proto'] != 17]
+    df1 = df[df['dst_port_tcp'] == 2020 & df['proto'] != 17]
+    df2 = df[df['src_port_tcp'] == 2020 & df['proto'] != 17]
     df1 = df1.append(df2, ignore_index=False)
-    df1 = df1.append(df3, ignore_index=False)
     df1 = df1.sort_values(by=['seq_num'])
     return df1
         
-def remove_quic_handshake():
+def remove_quic_handshake(df: pd.DataFrame):
     # TODO: may need to parse the traffic differently to figure this one out
-    pass
+    # could just knock off the first 2? packets
+    return df
 
 def remove_tcp_handshake():
     
     pass
 
+# TODO: reparse and update so I don't use data.len any more as it doesnt do shite!
 def label_quic_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     # data_length, pkt_length, arrival_time
     df = df.assign(e=pd.Series(range(1, len(df)+1)).values)
-    df.columns = ["time_frame_epoch", "src_ip", "dst_ip", "src_port", "dst_port", "src_port_tcp", "dst_port_tcp", "proto", "ip_len", "ip_hdr_len", "data_len", "udp_len", "time_delta", "time_relative", "udp_stream", "expert_msg", "seq_num"]
+    #df.columns = ["time_frame_epoch", "src_ip", "dst_ip", "src_port", "dst_port", "src_port_tcp", "dst_port_tcp", "proto", "ip_len", "ip_hdr_len", "quic_data_len", "data_len", "time_delta", "time_relative", "udp_stream", "expert_msg", "seq_num"]
     return df
         
 # TODO: need to change this to the correct columns
@@ -133,8 +133,8 @@ def unique_packet_size(capture_df: pd.DataFrame) -> np.array:
     largest_pkt_size = 1514
     unique_packet_sizes = [0 for i in range(largest_pkt_size - smallest_pkt_size + 1)]
     for index, row in capture_df.iterrows():
-        pkt_size = row['data_length']
-        unique_packet_sizes[pkt_size-54] = 1
+        pkt_size = row['data_len']
+        unique_packet_sizes[int(pkt_size)-54] = 1
     return np.array(unique_packet_sizes)
     
         
