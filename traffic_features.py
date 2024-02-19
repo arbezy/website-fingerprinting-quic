@@ -21,38 +21,74 @@ import sys
 
 def main():
     for f in os.listdir(sys.argv[1]):
-        current_capture = pd.read_csv(f"{f}")
-        simple_features(current_capture)
+        current_capture = pd.read_csv(f"{f}", sep='\t')
         
-def filter_out_irrelevant_pkts():
-    pass
+        if is_quic:
+            current_capture = label_quic_dataframe(current_capture)
+            current_capture = filter_out_irrelevant_pkts_quic(current_capture)
+            current_capture = remove_quic_handshake(current_capture)
+        else:
+            current_capture = label_tcp_dataframe(current_capture)
+            current_capture = filter_out_irrelevant_pkts_tcp(current_capture)
+            current_capture = remove_tcp_handshake(current_capture)
+            
+        simple = simple_features(current_capture)
+        transfer = transfer_features(current_capture)
+        
+        
+def filter_out_irrelevant_pkts_quic(df: pd.DataFrame) -> pd.DataFrame:
+    # checking source ports or ip addresses
+    df1 = df[df['dst_port'] == 2020]
+    df2 = df[df['src_port'] == 2020]
+    df1 = df1.append(df2, ignore_index=False)
+    df1 = df1.sort_values(by=['seq_num'])
+    return df1
+
+def filter_out_irrelevant_pkts_tcp(df: pd.DataFrame) -> pd.DataFrame:
+    df1 = df[df['dst_port_tcp'] == 2020]
+    df2 = df[df['src_port_tcp'] == 2020]
+    df3 = df[df['proto'] != 17]
+    df1 = df1.append(df2, ignore_index=False)
+    df1 = df1.append(df3, ignore_index=False)
+    df1 = df1.sort_values(by=['seq_num'])
+    return df1
         
 def remove_quic_handshake():
+    # TODO: may need to parse the traffic differently to figure this one out
     pass
 
 def remove_tcp_handshake():
+    
     pass
 
-def label_dataframe(capture_df: pd.DataFrame) -> pd.DataFrame:
+def label_quic_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     # data_length, pkt_length, arrival_time
-    pass
+    df = df.assign(e=pd.Series(range(1, len(df)+1)).values)
+    df.columns = ["time_frame_epoch", "src_ip", "dst_ip", "src_port", "dst_port", "src_port_tcp", "dst_port_tcp", "proto", "ip_len", "ip_hdr_len", "data_len", "udp_len", "time_delta", "time_relative", "udp_stream", "expert_msg", "seq_num"]
+    return df
         
-        
+# TODO: need to change this to the correct columns
+def label_tcp_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.assign(e=pd.Series(range(1, len(df)+1)).values)
+    df.columns = ["time_frame_epoch", "src_ip", "dst_ip", "src_port", "dst_port", "src_port_tcp", "dst_port_tcp", "proto", "ip_len", "ip_hdr_len", "data_len", "udp_len", "time_delta", "time_relative", "udp_stream", "expert_msg", "seq_num"]
+    return df
+    
 # SIMPLE FEATURES:
 
 def simple_features(capture_df: pd.DataFrame):
     simple_features_results = {s1+s2:0 for s1 in ["positive", "negative"] for s2 in ["tiny", "small", "medium", "large"]}
     for index, row in capture_df.iterrows():
         # TODO: find out which col src and dst point are in after parsing
-        src_port = row
-        dst_port = row
-        pkt_size = row
-        if src_port == 2020 and dst_port == 58762:
-            simple_features_results["positive"+get_pkt_size_classification(pkt_size)]
-        elif dst_port == 2020 and src_port == 58762:
-           simple_features_results["negative"+get_pkt_size_classification(pkt_size)]
+        src_port = row.src_port
+        dst_port = row.dst_port
+        pkt_size = row.data_len
+        # server port is 2020
+        if src_port == 2020:
+            simple_features_results["negative"+get_pkt_size_classification(pkt_size)]
+        elif dst_port == 2020:
+           simple_features_results["positive"+get_pkt_size_classification(pkt_size)]
         else:
-            print("Neither the src or dst ip matched the client or server IP")
+            print("Neither the src or dst ip matched the client or server IP (but that's ok)")
     # TODO: may want to perform some transformation on this dictionary to make it easier for pandas to parse :)
     return simple_features_results
         
@@ -74,6 +110,9 @@ def get_pkt_size_classification(pkt_size: bytes) -> str:
 
 
 # ADVANCED FEATURES:
+
+def transfer_features():
+    pass
 
 """this feature statistics whether the packet 𝑡 of
 length 𝑙 is in the traffic 𝑇 . Specifically, define Length(𝑡) as a func-
@@ -185,12 +224,16 @@ def burst_features():
 mission time of traffic 𝑇 . This 1-dimension feature is set to
 ∑{Time(𝑡𝑖) − Time(𝑡𝑖−1)|𝑡𝑖 ∈ 𝑇 , 𝑖 > 1}
 """
-def total_transmission_time():
-    pass
+def total_transmission_time(df: pd.DataFrame):
+    # think here I can just get the time stamp of the final packet
+    final_elem = df.iloc(-1)
+    return final_elem.time_relative
 
 
-        
-            
-    
-    
+
+
+
+is_quic = False
+if sys.argv[2] == "quic":
+    is_quic = True  
 main()
