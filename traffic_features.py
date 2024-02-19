@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+from statistics import mean
 
 # TODO: need to write results of feature extraction somewhere... another dataframe that I can export to csv?
 
@@ -111,7 +112,9 @@ def get_pkt_size_classification(pkt_size: bytes) -> str:
 
 # ADVANCED FEATURES:
 
-def transfer_features():
+def transfer_features(capture_df: pd.DataFrame):
+    u_p_z = unique_packet_size(capture_df)
+    df = pd.DataFrame
     pass
 
 """this feature statistics whether the packet 𝑡 of
@@ -122,7 +125,7 @@ tion that calculates the length of packet 𝑡, if 𝑙 ∈ {Length(𝑡𝑖)|�
 from 54 to 1514).
 """
 # first i need to know the range of my packet sizes!
-def unique_packet_size(capture_df: pd.DataFrame):
+def unique_packet_size(capture_df: pd.DataFrame) -> np.array:
     # using the length of the data rather than the length of the packet as I think it makes more sense
     # TODO: check this over with Marc
     # TODO: change these values to match my actual data
@@ -132,8 +135,7 @@ def unique_packet_size(capture_df: pd.DataFrame):
     for index, row in capture_df.iterrows():
         pkt_size = row['data_length']
         unique_packet_sizes[pkt_size-54] = 1
-    # TODO: return a pd / np array?
-    return unique_packet_sizes
+    return np.array(unique_packet_sizes)
     
         
 """packet size count: this feature statistics the number of packet 𝑡 of
@@ -217,8 +219,29 @@ site direction [33]. Bursts numbers, bursts maximal length, and
 bursts mean length is the statistical features based on burst in the
 traffic 𝑇
 """
-def burst_features():
-    pass
+""" OK that description is a bit shite, the one from the paper they reference is better...
+https://www.scopus.com/record/display.uri?eid=2-s2.0-84878355718&origin=inward
+in that original paper they just use burst size not all this extra stuff.
+
+"""
+def burst_features(df: pd.DataFrame):
+    previous_direction = 'forward'
+    current_direction = 'forward'
+    curr_burst = pd.DataFrame()
+    burst_sizes = []
+    for index, row in df.iterrows():
+        if row.dst_port == 2020:
+            previous_direction = current_direction
+            current_direction = 'forward'
+        elif row.src_port == 2020:
+            previous_direction = current_direction
+            current_direction = 'backward'
+        if current_direction == previous_direction:
+            curr_burst.append(row)
+        else:
+            burst_sizes.append(curr_burst['data_length'].sum())
+            curr_burst = pd.DataFrame()
+    return (burst_sizes, max(burst_sizes), mean(burst_sizes))
 
 """total transmission time: this feature statistics the total trans-
 mission time of traffic 𝑇 . This 1-dimension feature is set to
